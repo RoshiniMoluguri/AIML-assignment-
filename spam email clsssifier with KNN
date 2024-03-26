@@ -1,0 +1,116 @@
+import os
+import string
+from nltk.corpus import stopwords
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import numpy as np
+
+def load_data():
+    print("Loading data...")
+    ham_files_location = os.listdir("dataset/ham")
+    spam_files_location = os.listdir("dataset/spam")
+    data = []
+
+    # Load ham emails
+    for file_path in ham_files_location:
+        with open(os.path.join("dataset/ham", file_path), "r") as f:
+            text = f.read()
+            data.append([text, "ham"])
+
+    # Load spam emails
+    for file_path in spam_files_location:
+        with open(os.path.join("dataset/spam", file_path), "r") as f:
+            text = f.read()
+            data.append([text, "spam"])
+
+    data = np.array(data)
+    print("Loaded data")
+    return data
+
+def preprocess_data(data):
+    print("Preprocessing data...")
+    punc = string.punctuation
+    sw = set(stopwords.words('english'))
+
+    for i in range(len(data)):
+        text = data[i][0]
+        # Remove punctuation and symbols
+        for char in punc:
+            text = text.replace(char, "")
+        # Lowercase all letters and remove stopwords
+        text = ' '.join([word.lower() for word in text.split() if word.lower() not in sw])
+        data[i][0] = text
+
+    print("Preprocessed data")
+    return data
+
+def split_data(data):
+    print("Splitting data...")
+    features = data[:, 0]
+    labels = data[:, 1]
+    training_data, test_data, training_labels, test_labels = train_test_split(features, labels, test_size=0.27, random_state=42)
+    print("Splitted data")
+    return training_data, test_data, training_labels, test_labels
+
+def get_count(text):
+    wordCounts = {}
+    for word in text.split():
+        if word in wordCounts:
+            wordCounts[word] += 1
+        else:
+            wordCounts[word] = 1
+    return wordCounts
+
+def euclidean_difference(test_WordCounts, training_WordCounts):
+    total = 0
+    for word in test_WordCounts:
+        if word in test_WordCounts and word in training_WordCounts:
+            total += (test_WordCounts[word] - training_WordCounts[word]) ** 2
+            del training_WordCounts[word]
+        else:
+            total += test_WordCounts[word] ** 2
+    for word in training_WordCounts:
+        total += training_WordCounts[word] ** 2
+    return total ** 0.5
+
+def get_class(selected_Kvalues):
+    spam_count = sum(1 for value in selected_Kvalues if value[0] == "spam")
+    ham_count = len(selected_Kvalues) - spam_count
+    return "spam" if spam_count > ham_count else "ham"
+
+def knn_classifier(training_data, training_labels, test_data, K, tsize):
+    print("Running KNN Classifier...")
+    result = []
+    training_WordCounts = [get_count(text) for text in training_data]
+
+    for test_text in test_data:
+        similarity = []
+        test_WordCounts = get_count(test_text)
+        for index in range(len(training_data)):
+            euclidean_diff = euclidean_difference(test_WordCounts, training_WordCounts[index])
+            similarity.append([training_labels[index], euclidean_diff])
+        similarity = sorted(similarity, key=lambda i: i[1])
+        selected_Kvalues = similarity[:K]
+        result.append(get_class(selected_Kvalues))
+
+    print("KNN Classifier completed")
+    return result
+
+def main(K):
+    data = load_data()
+    data = preprocess_data(data)
+    training_data, test_data, training_labels, test_labels = split_data(data)
+    tsize = len(test_data)
+    result = knn_classifier(training_data, training_labels, test_data[:tsize], K, tsize)
+    accuracy = accuracy_score(test_labels[:tsize], result)
+
+    print("Training data size\t:", len(training_data))
+    print("Test data size\t\t:", len(test_data))
+    print("K value\t\t\t:", K)
+    print("Samples tested\t\t:", tsize)
+    print("% accuracy\t\t\t:", accuracy * 100)
+    print("Number correct\t\t:", int(accuracy * tsize))
+    print("Number wrong\t\t:", int((1 - accuracy) * tsize))
+
+if __name__ == "__main__":
+    main(11)
